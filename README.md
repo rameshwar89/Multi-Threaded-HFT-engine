@@ -1,12 +1,12 @@
 # Multi-Threaded High-Frequency Trading (HFT) Engine
 
-## 🎥 Live Demo
-> **Note to recruiters:** Watch the video below to see the engine matching 10,000 orders in sub-microsecond latency and offloading to MySQL in real-time!
-*(Drag and drop your demo video .mp4 file here on GitHub!)*
+## Live Demo
+
+https://github.com/user-attachments/assets/6564a3d6-4316-4530-81ed-34b7dda38a6a
 
 A blazingly fast, multi-threaded high-frequency trading (HFT) engine built for extreme low-latency order matching. This project features a custom C++ limit order book, a Node.js WebSocket bridge for real-time frontend updates, and asynchronous MySQL persistence via Redis Pub/Sub to ensure the core trading loop never blocks.
 
-## 🚀 Architecture Overview
+## Architecture Overview
 
 This project is designed to eliminate I/O bottlenecks by isolating the critical trading path from database persistence and client communication.
 
@@ -17,13 +17,26 @@ This project is designed to eliminate I/O bottlenecks by isolating the critical 
 5. **Node.js Worker (`worker.js`)**: Subscribes to the Redis channel, batches trades in-memory, and flushes them to MySQL in large bulk inserts to minimize database locking.
 6. **MySQL Database**: Persists all matched trades.
 
-## ⚡ Performance
+## Core Architecture Highlights
+
+### The Hot Path vs. Cold Path
+To achieve sub-microsecond latency, the system strictly isolates the time-critical matching engine from the slow database persistence layer:
+- **The Hot Path (C++ Engine):** Orders are ingested via TCP, matched in the limit order book, and executions are broadcast back to the client immediately. The engine *never* blocks to wait for a database write.
+- **The Cold Path (Redis + Node.js Worker):** When a trade occurs, the C++ engine fires an asynchronous, fire-and-forget `PUBLISH` event to Redis. A background Node.js worker subscribes to this stream, batches the trades in memory, and performs bulk `INSERT` operations into MySQL.
+
+### Lock-Free Ring Buffer (SPSC)
+Incoming TCP packets are received by a dedicated networking thread and pushed into a Single-Producer Single-Consumer (SPSC) lock-free ring buffer. The core matching thread continuously consumes from this buffer, entirely decoupling network I/O delays from the order matching logic.
+
+### Pre-Allocated Memory Pool
+Dynamic memory allocation (`malloc`/`new`) is disastrous for HFT latency. The engine uses a custom memory pool that pre-allocates 1,000,000 `order` objects at startup. The matching loop simply pops available pointers from a free-list, reducing heap allocation overhead to exactly zero during active trading.
+
+## Performance
 
 - **Pre-allocated Memory Pool**: Eliminates `malloc`/`new` overhead during the trading loop.
 - **Lock-Free Ring Buffer**: Decouples network I/O (TCP socket reads) from the core order matching thread.
 - **Batched Database Writes**: Prevents the database from becoming a bottleneck during high-volume spikes (e.g., 10,000 orders/second).
 
-## 🛠️ Prerequisites
+## Prerequisites
 
 - **C++17** compatible compiler (`g++`)
 - **Make**
@@ -32,7 +45,7 @@ This project is designed to eliminate I/O bottlenecks by isolating the critical 
 - **MySQL Server** (running on `localhost:3306`)
 - `libhiredis-dev` (for C++ Redis integration)
 
-## 📦 Installation & Setup
+## Installation & Setup
 
 ### 1. Database Setup
 Create the MySQL database and user:
@@ -65,7 +78,7 @@ cd ../worker
 npm install redis mysql2
 ```
 
-## 🚀 Running the Engine Locally
+## Running the Engine Locally
 
 You will need to open 4 separate terminals to run all the components of this microservice architecture.
 
@@ -91,7 +104,7 @@ npx serve
 ```
 *(Open the provided `localhost` link in your browser to view the trading dashboard).*
 
-## 🧪 Load Testing
+## Load Testing
 
 To simulate high-frequency trading volumes, you can run the provided Python load tester. It spins up 10 threads and bombards the engine with 10,000 random orders in under a second.
 
@@ -99,13 +112,3 @@ To simulate high-frequency trading volumes, you can run the provided Python load
 python3 client/load_tester.py
 ```
 You will immediately see the latency metrics in your frontend dashboard, and `worker.js` will log bulk flushes to MySQL.
-
-## 📚 Documentation
-
-For a deep dive into the architectural decisions and C++ memory management, see the `docs/` folder:
-- `0_complete_workflow.md`
-- `1_memorypool_architecture.md`
-- `2_orderbook_architecture.md`
-- `3_concurrency_architecture.md`
-- `4_networking_architecture.md`
-- `5_full_stack_architecture.md`
