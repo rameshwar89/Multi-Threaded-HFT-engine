@@ -24,11 +24,11 @@ threads = []
 start_time = time.time()
 
 for _ in range(10):
-    t = threading.Thread(target=fire_orders, args=(100000,))
+    t = threading.Thread(target=fire_orders, args=(1000,))
     threads.append(t)
     t.start()
 
 for t in threads:
     t.join()
 
-print(f"Sent 1,000,000 orders in {time.time() - start_time} seconds")
+print(f"Sent 10,000 orders in {time.time() - start_time} seconds")

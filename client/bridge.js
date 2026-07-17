@@ -23,7 +23,12 @@ wss.on('connection', (ws) => {
     // Forward messages from C++ -> Bridge -> Browser
     tcpClient.on('data', (data) => {
         if (ws.readyState === 1) { // 1 = WebSocket.OPEN
-            ws.send(data.toString());
+            const lines = data.toString().split('\n');
+            for (const line of lines) {
+                if (line.trim().length > 0) {
+                    ws.send(line.trim());
+                }
+            }
         }
     });
 

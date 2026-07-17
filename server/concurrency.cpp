@@ -1,9 +1,11 @@
 #include <chrono>
 #include <iostream>
 #include <unistd.h>
+#include <sys/socket.h>
 #include "concurrency.hpp"
 #include "orderbook.hpp"
 #include "memorypool.hpp"
+#include <hiredis/hiredis.h>
 
 using namespace std;
 using namespace chrono;
@@ -16,6 +18,7 @@ condition_variable notempty;
 condition_variable notfull;
 memorypool globalmp;
 int globalid = 0;
+redisContext* redis = nullptr;
 
 vector<int> active_clients;
 mutex clients_lock;
@@ -42,6 +45,12 @@ void consumerloop() {
     initpool(&globalmp, poolsize);
     initorderbook();
     
+    redis = redisConnect("127.0.0.1", 6379);
+    if (redis == nullptr || redis->err) {
+        printf("Redis connection error\n");
+        exit(1);
+    }
+    
     while (true) {
         unique_lock<mutex> lock(ringlock);
         while (readindex == writeindex) {
@@ -63,15 +72,12 @@ void consumerloop() {
             auto end = high_resolution_clock::now();
             
             auto latency = duration_cast<nanoseconds>(end - start).count();
-            cout << "Order processed in " << latency << " ns" << endl;
             
-            string response = "EXEC " + to_string(neworder->id) + " " + to_string(latency) + "ns";
+            string response = "EXEC " + to_string(neworder->id) + " " + to_string(latency) + "ns\n";
             {
                 lock_guard<mutex> lock(clients_lock);
                 for (int fd : active_clients) {
-                    if (write(fd, response.c_str(), response.length()) < 0) {
-                        // Silently ignore broken pipes, handled by SIG_IGN
-                    }
+                    send(fd, response.c_str(), response.length(), MSG_DONTWAIT);
                 }
             }
         }

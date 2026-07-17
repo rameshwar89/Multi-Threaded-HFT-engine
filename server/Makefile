@@ -4,7 +4,7 @@ CXXFLAGS = -Wall -O3 -std=c++17 -pthread
 all: hftengine
 
 hftengine: server.o concurrency.o orderbook.o memorypool.o
-	$(CXX) $(CXXFLAGS) -o hftengine server.o concurrency.o orderbook.o memorypool.o
+	$(CXX) $(CXXFLAGS) -o hftengine server.o concurrency.o orderbook.o memorypool.o -lhiredis
 
 server.o: server.cpp
 	$(CXX) $(CXXFLAGS) -c server.cpp

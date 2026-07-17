@@ -1,4 +1,17 @@
 #include "orderbook.hpp"
+#include <hiredis/hiredis.h>
+#include <string>
+
+using namespace std;
+
+extern redisContext* redis;
+
+void publishtrade(int isbuy, int price, int quantity) {
+    char side = isbuy ? 'B' : 'S';
+    string payload = string(1, side) + " " + to_string(price) + " " + to_string(quantity);
+    redisReply* reply = (redisReply*)redisCommand(redis, "PUBLISH trades %s", payload.c_str());
+    if (reply) freeReplyObject(reply);
+}
 
 pricelevel buylevels[maxprice];
 pricelevel selllevels[maxprice];
@@ -67,9 +80,11 @@ void processorder(memorypool* mp, order* ord) {
             while (match != nullptr && ord->quantity > 0) {
                 order* nextmatch = match->next;
                 if (match->quantity <= ord->quantity) {
+                    publishtrade(ord->isbuy, ord->price, match->quantity);
                     ord->quantity -= match->quantity;
                     removeorder(mp, match);
                 } else {
+                    publishtrade(ord->isbuy, ord->price, ord->quantity);
                     match->quantity -= ord->quantity;
                     ord->quantity = 0;
                 }
@@ -86,9 +101,11 @@ void processorder(memorypool* mp, order* ord) {
             while (match != nullptr && ord->quantity > 0) {
                 order* nextmatch = match->next;
                 if (match->quantity <= ord->quantity) {
+                    publishtrade(ord->isbuy, ord->price, match->quantity);
                     ord->quantity -= match->quantity;
                     removeorder(mp, match);
                 } else {
+                    publishtrade(ord->isbuy, ord->price, ord->quantity);
                     match->quantity -= ord->quantity;
                     ord->quantity = 0;
                 }
